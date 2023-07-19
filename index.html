@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Layout Artifact</title>
+    <style>
+    *{
+        -webkit-user-select: none;
+        -khtml-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        -o-user-select: none;
+        user-select: none;
+    }
+    body{
+        margin: 0;
+        min-height: 100vh;
+    }
+    #workArea{
+        position: fixed;
+        height: 100vh;
+        width: 100vw;
+
+    }
+    #toolBox{
+        position: fixed;
+        z-index: 10;
+        right: 20px;
+        width: 150px;
+        color: aliceblue;
+    }
+    #codePage{
+        position: fixed;
+        z-index: 5;
+        margin: 0;
+        background-color: rgb(0, 6, 59);
+        color: aliceblue;
+        padding: 5vh 5vw;
+        height: 90vh;
+        width: 90vw;
+    }
+    #attributes{
+        display: grid;
+        grid-template-columns: auto auto;
+        grid-gap: 10px;
+
+        background-color: rgb(35, 84, 139);
+        padding: 10px;
+    }
+    #attributes .row{
+        grid-column: 1 / 3;
+    }
+    #attributes input{
+        width: 95%;
+    }
+    #attributes input[type="color"]{
+        width: 93%;
+    }
+    #elementTable{
+        padding: 10px;
+    }
+    #elementTable span{
+        display: block;
+    }
+
+
+    .btn{
+        text-align: center;
+        cursor: pointer;
+        padding: 5px 0px;
+        border-top: 0px;
+    }
+    .choose{
+        box-shadow: 0px 0px 30px rgb(197, 161, 0);
+    }
+
+    </style>
+</head>
+<body>
+    <!-- 工作區 -->
+    <div id="workArea" onmousedown="draw()" onmouseup="drawFinish()"></div>
+    <!-- 工具箱 -->
+    <div id="toolBox">
+        <!-- 元件屬性 -->
+        <div id="attributes">
+            <div id="elementName" class="row"><i>none</i></div>
+            <div>color: </div><div><input type="color" class="toolBox-input" onkeydown="updateAttr(event)" value="#e66465"/></div>
+            <div>x:     </div><div><input type="text"  class="toolBox-input" onkeydown="updateAttr(event)" value="0"/></div>
+            <div>y:     </div><div><input type="text"  class="toolBox-input" onkeydown="updateAttr(event)" value="0"/></div>
+            <div>width: </div><div><input type="text"  class="toolBox-input" onkeydown="updateAttr(event)" value="0"/></div>
+            <div>height:</div><div><input type="text"  class="toolBox-input" onkeydown="updateAttr(event)" value="0"/></div>
+        </div>
+        <!-- 元件表 -->
+        <div id="elementTable" style="background-color: rgb(35, 119, 139);"><i>none</i></div>
+        <!-- 按鈕 -->
+        <div class="btn" style="background-color: rgb(170, 47, 47); border: 3px solid rgb(109, 29, 29);" onclick="removeChoose()">Remove</div>
+        <div class="btn" style="background-color: rgb(161, 79, 111); border: 3px solid rgb(105, 50, 71);" onclick="side()">Side</div>
+        <div class="btn" style="background-color: rgb(47, 170, 113); border: 3px solid rgb(34, 121, 80);" onclick="code()">Code</div>
+        <div class="btn" style="background-color: rgb(85, 85, 85); border: 3px solid rgb(51, 51, 51);" onclick="hide()">Close</div>
+    </div>
+
+
+    <script>
+    var mousePos; // Use mousePos.x and mousePos.y
+
+    (function() {
+        
+        document.onmousemove = handleMouseMove;
+
+        function handleMouseMove(event) {
+            var dot, eventDoc, doc, body, pageX, pageY;
+
+            event = event || window.event; // IE-ism
+
+            // If pageX/Y aren't available and clientX/Y are,
+            // calculate pageX/Y - logic taken from jQuery.
+            // (This is to support old IE)
+            if (event.pageX == null && event.clientX != null) {
+                eventDoc = (event.target && event.target.ownerDocument) || document;
+                doc = eventDoc.documentElement;
+                body = eventDoc.body;
+
+                event.pageX = event.clientX +
+                (doc && doc.scrollLeft || body && body.scrollLeft || 0) -
+                (doc && doc.clientLeft || body && body.clientLeft || 0);
+                event.pageY = event.clientY +
+                (doc && doc.scrollTop  || body && body.scrollTop  || 0) -
+                (doc && doc.clientTop  || body && body.clientTop  || 0 );
+            }
+
+            mousePos = {
+                x: event.pageX,
+                y: event.pageY
+            };
+        }
+
+    })();
+
+    String.prototype.replaceAll = function(search, replacement) {
+        var target = this;
+        return target.replace(new RegExp(search, 'g'), replacement);
+    };
+    String.prototype.hashCode = function() {
+        var hash = 0, i, chr;
+        if (this.length === 0) return hash;
+        for (i = 0; i < this.length; i++) {
+            chr   = this.charCodeAt(i);
+            hash  = ((hash << 5) - hash) + chr;
+            hash |= 0; // Convert to 32bit integer
+        }
+        return hash;
+    };
+    Array.prototype.remove = function() {
+        var what, a = arguments, L = a.length, ax;
+        while (L && this.length) {
+            what = a[--L];
+            while ((ax = this.indexOf(what)) !== -1) {
+                this.splice(ax, 1);
+            }
+        }
+        return this;
+    };
+
+
+
+
+
+    var toolBoxInput = document.getElementsByClassName("toolBox-input");
+    var elementName = document.getElementById("elementName");
+    var elementTable = []; //元件表
+    var elementIndex = 1; //元件序號 (輸出class用)
+    var c, x, y, w, h, b, r, ww, hh;
+    var pressed = false;
+    var mode;
+
+    var pointX, pointY; //暫存
+
+    function draw() {
+    if(!pressed){
+
+        mode = "drawing";
+
+        //初始化
+        toolBoxInput[1].value = mousePos.x;
+        toolBoxInput[2].value = mousePos.y;
+        pointX = toolBoxInput[1].value;
+        pointY = toolBoxInput[2].value;
+
+        //實際新增div
+        var div = document.createElement("div");
+            div.classList.add("element");
+
+        //設定name 在輸出時轉成class
+        div.setAttribute("name", "div"+elementIndex); elementIndex++;
+        div.setAttribute("onmousedown", "drag(this)");
+        div.setAttribute("onmouseup", "drop(this)");
+        
+        //選擇此div
+        choose(div);
+        
+        document.body.appendChild(div);  
+        
+        //按壓偵測
+        pressed = true;
+
+        //關閉100%
+        ww = false; hh = false;
+
+        //開始畫面刷新
+        update(div);
+    }
+    }
+    function drawFinish() {
+    if(pressed){
+
+        //如果div的數據太小 就取消 防止空點也生產
+        if(toolBoxInput[3].value < 10||toolBoxInput[4].value < 10) removeChoose();
+        else{
+
+        //新增物件名稱到元件表
+        if(mode == "drawing") elementTable.push(elementName.textContent);
+        updateElementTable();
+
+        }
+        //放開 (防止update)
+        pressed = false;
+    }
+    }
+
+    //選擇元件
+    function choose(self) {
+
+        //更新工具箱的元件名稱
+        elementName.textContent = self.getAttribute("name");
+
+        //消除其他的選取
+        var chooseEle = document.getElementsByClassName("choose");
+        if(chooseEle[0]) chooseEle[0].classList.remove("choose");
+        self.classList.add("choose");
+    }
+
+    //拖動
+    function drag(self) {
+    if(!pressed){
+
+        //關閉100%
+        ww = false; hh = false;
+
+        choose(self);
+
+        //更新此元件之屬性
+        toolBoxInput[1].value = self.getBoundingClientRect().left;
+        toolBoxInput[2].value = self.getBoundingClientRect().top;
+        toolBoxInput[3].value = self.offsetWidth;
+        toolBoxInput[4].value = self.offsetHeight;
+
+        //滑鼠按在div上的位置
+        pointX = mousePos.x - self.getBoundingClientRect().left;
+        pointY = mousePos.y - self.getBoundingClientRect().top;
+
+        //點邊緣可縮放
+        if(mousePos.x > self.getBoundingClientRect().right-20)       mode = "scaleR";
+        else if(mousePos.x < self.getBoundingClientRect().left+20)   mode = "scaleL";
+        else if(mousePos.y > self.getBoundingClientRect().bottom-20) mode = "scaleB";
+        else if(mousePos.y < self.getBoundingClientRect().top+20)    mode = "scaleT";
+        //否則為一般拖動
+        else mode = "dragging"
+        
+        update(self);
+        pressed = true;
+    }
+    }
+    function drop(self) {
+    if(pressed){
+
+        pressed = false;
+    }
+    }
+
+    //刪除選擇的元素
+    function removeChoose() {
+        var chooseEle = document.getElementsByClassName("choose");
+        if(chooseEle[0]){
+
+            elementTable.remove(chooseEle[0].getAttribute('name'));
+            updateElementTable();
+            chooseEle[0].remove();
+
+            elementName.innerHTML = "<i>none</i>";
+            toolBoxInput[3].value = 0;
+            toolBoxInput[4].value = 0;
+        } 
+    }
+
+    //刷新元件表
+    function updateElementTable() {
+        
+        document.getElementById("elementTable").innerHTML = "";
+        var elementTableSpan = "";
+        if(elementTable.length!=0)
+        for (let i = 0; i < elementTable.length; i++) 
+            elementTableSpan += "<span>"+elementTable[i]+"</span>";
+        else elementTableSpan = "<i>none</i>"
+        document.getElementById("elementTable").innerHTML = elementTableSpan;
+    }
+
+    function updateAttr(event) {
+        if(event.keyCode == 13){
+
+            var chooseEle = document.getElementsByClassName("choose");
+            if(chooseEle[0]){
+
+                mode="updateAttr";
+                update(chooseEle[0]);
+
+            }
+        }
+    }
+
+    //刷新元件屬性
+    function update(div) {
+
+        var delay = function(s){
+            return new Promise(function(resolve,reject){
+                setTimeout(resolve,s); 
+            });
+        };
+
+        
+
+        delay().then(function(){
+            
+            //繪製
+            if(mode=="drawing"){
+                c = toolBoxInput[0].value;
+                w = Math.abs(mousePos.x - pointX);
+                h = Math.abs(mousePos.y - pointY);
+
+                if(mousePos.x < pointX) x = mousePos.x;
+                else x = toolBoxInput[1].value;
+                if(mousePos.y < pointY) y = mousePos.y;
+                else y = toolBoxInput[2].value;
+            }
+            //拖動
+            else if(mode=="dragging"){
+                c = toolBoxInput[0].value;
+                w = toolBoxInput[3].value;
+                h = toolBoxInput[4].value;
+                //置下, 置右
+                b = false; r = false;
+
+                //置左
+                if(mousePos.x < 100){
+                    hh = true;
+                    x = 0;
+                    y = 0;
+                }
+                //置右
+                else if(mousePos.x > window.innerWidth-100){
+                    hh = true;
+                    r = true;
+                }
+                //置上
+                else if(mousePos.y < 100){
+                    ww = true;
+                    x = 0;
+                    y = 0;
+                }
+                //置下
+                else if(mousePos.y > window.innerHeight-100){
+                    ww = true;
+                    b = true;
+                }
+                //一般拖動
+                else{
+                    h = toolBoxInput[4].value;
+                    x = mousePos.x-pointX;
+                    y = mousePos.y-pointY;
+                }
+
+            }
+            //縮放(上)
+            else if(mode=="scaleT"){
+                x = toolBoxInput[1].value;
+                y = mousePos.y;
+                w = toolBoxInput[3].value;
+                h = div.getBoundingClientRect().bottom - mousePos.y;
+                hh = false;
+            }
+            //縮放(左)
+            else if(mode=="scaleL"){
+                x = mousePos.x;
+                y = toolBoxInput[2].value;
+                w = div.getBoundingClientRect().right - mousePos.x;
+                h = toolBoxInput[4].value;
+                ww = false;
+            }
+            //縮放(下)
+            else if(mode=="scaleB"){
+                x = toolBoxInput[1].value;
+                y = toolBoxInput[2].value;
+                w = toolBoxInput[3].value;
+                h = mousePos.y - div.getBoundingClientRect().top;
+                hh = false;
+            }
+            //縮放(右)
+            else if(mode=="scaleR"){
+                x = toolBoxInput[1].value;
+                y = toolBoxInput[2].value;
+                w = mousePos.x - div.getBoundingClientRect().left;
+                h = toolBoxInput[4].value;
+                ww = false;
+            }
+            else if(mode=="updateAttr"){
+                
+                c = toolBoxInput[0].value;
+                
+                if(toolBoxInput[3].value=="100%"){
+                    ww = true;
+                    x = 0;
+                } 
+                else{ 
+                    w = toolBoxInput[3].value;
+                    x = toolBoxInput[1].value;
+                }
+                if(toolBoxInput[4].value=="100%"){
+                    hh = true;
+                    y = 0;
+                } 
+                else{
+                    h = toolBoxInput[4].value;
+                    y = toolBoxInput[2].value;
+                } 
+              
+            }
+
+            toolBoxInput[1].value = x;
+            toolBoxInput[2].value = y;
+            if(mode!="dragging"){
+
+            toolBoxInput[3].value = w;
+            toolBoxInput[4].value = h;
+            }
+
+            //加上單位
+            x += "px";
+            y += "px";
+            if(!ww) w += "px";
+            else w = "100%";
+            if(!hh) h += "px";
+            else h = "100%";
+
+            
+            //設定屬性
+            div.setAttribute("style", "position: fixed; background-color:"+c+";width: "+w+"; height:"+h+";");
+
+            //是否置下或置右 css結構會變
+            if(b) div.style.cssText += "bottom:0px; left:0px;";
+            else if(r) div.style.cssText += "right:0px; top:0px;";
+            //一般拖動
+            else div.style.cssText += "top:"+y+"; left:"+x+";";
+
+            //FPS
+            return delay(10);
+
+        }).then(function(){
+
+            //如果沒放開 再跑一次
+            if(pressed) update(div);
+            
+        });
+        
+    }
+
+
+    </script>
+
+    <script>
+    //輸出code
+
+    var codeOn = false;
+
+    function code() {
+        if(!codeOn){
+
+            codeOn = true;
+
+            //所有產出的div
+            var elements = document.getElementsByClassName("element");
+
+            //css
+            var cont = "&lt;style&gt;\n";
+            for (let i = 0; i < elements.length; i++) {
+            
+                //name轉class
+                cont += '.'+elements[i].getAttribute('name');
+                cont += "{\n\t";
+                cont += elements[i].style.cssText.replaceAll("; ", ";\n\t")+"\n";
+                cont += "}\n";
+            }
+                cont += "&lt;/style&gt;\n";
+
+            //html
+            for (let i = 0; i < elements.length; i++)
+                cont += '&ltdiv class="'+elements[i].getAttribute('name')+'"&gt&lt/div&gt;\n';
+      
+            var pre = document.createElement("pre");
+                pre.setAttribute("id", "codePage");
+                pre.innerHTML = cont;
+                document.body.appendChild(pre);  
+
+        }
+        else{
+            //再按一次關閉
+            var pre = document.getElementById("codePage");
+            pre.remove();
+            codeOn = false;
+        }
+        
+    }
+    </script>
+
+    <script>
+    //工具箱操作
+
+    //隱藏
+    function hide() {
+
+//使用style list的方式*************
+        var attributes = document.getElementById("attributes");
+        if(attributes.style.cssText == "display: none;")
+            attributes.style.cssText = "display: grid;"
+        else
+            attributes.style.cssText = "display: none;"
+
+        var elementTable = document.getElementById("elementTable");
+        if(elementTable.style.cssText == "display: none;")
+            elementTable.style.cssText = "display: grid;"
+        else
+            elementTable.style.cssText = "display: none;"
+
+        var btns = document.getElementsByClassName("btn");
+        if(btns[0].style.cssText == "display: none;")
+            for (let i = 0; i < btns.length-1; i++) 
+                btns[i].style.cssText = "display: block;";
+        else
+            for (let i = 0; i < btns.length-1; i++) 
+                btns[i].style.cssText = "display: none;"
+
+    }
+
+    var sideType = 1;
+    function side() {
+
+        var toolBox = document.getElementById("toolBox");
+        
+        sideType++;
+        console.log(sideType);
+        switch(sideType) {
+        case 1: //右上
+            toolBox.style.cssText = "top:0px; right: 20px;"
+        break;
+        case 2: //右下
+            toolBox.style.cssText = "bottom: 0px; right: 20px;"
+        break;
+        case 3: //左下
+            toolBox.style.cssText = "bottom: 0px; left: 20px;"
+        break;
+        case 4: //左上
+            toolBox.style.cssText = "top:0px; left: 20px;"
+        break;
+        default:
+        break;
+        }
+
+        if(sideType == 4) sideType = 0;
+    }
+    </script>
+</body>
+</html>
